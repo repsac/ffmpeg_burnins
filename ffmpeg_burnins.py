@@ -248,7 +248,7 @@ class Burnins(object):
         options = options or FrameNumberOptions()
         options['expression'] = r'%%{eif\:n+%d\:d}' % options['frame_offset']
         text = str(int(self.end_frame + options['frame_offset']))
-        self._add_overlay(text, align, options)
+        self._add_burnin(text, align, options)
 
     def add_text(self, text, align, options=None):
         """
@@ -259,9 +259,9 @@ class Burnins(object):
         :param dict options: recommended to use TextOptions
         """
         options = options or TextOptions()
-        self._add_overlay(text, align, options)
+        self._add_burnin(text, align, options)
 
-    def _add_overlay(self, text, align, options):
+    def _add_burnin(self, text, align, options):
         """
         Generic method for building the filter flags.
 
