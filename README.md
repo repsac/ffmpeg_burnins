@@ -12,23 +12,23 @@ b = ffmpeg_burnins.Burnins('source.mov')
 # options are {} based, but using the provided classes you have the convenience of having defaults
 # unsupported keys will raise an exception
 options = ffmpeg_burnins.TextOptions(font_size=48)
-b.add_text('Top Center', ffmpeg_burnins.Align.TOP_CENTERED,
+b.add_text('Top Center', ffmpeg_burnins.TOP_CENTERED,
            options=options)
 
 # setting the opacity to 50%
 options['opacity'] = 0.5
-b.add_text('Bottom Center@0.5', ffmpeg_burnins.Align.BOTTOM_CENTERED,
+b.add_text('Bottom Center@0.5', ffmpeg_burnins.BOTTOM_CENTERED,
            options=options)
 
 options = ffmpeg_burnins.TextOptions(font_size=48, x_offset=100)
-b.add_text('Bottom+100', ffmpeg_burnins.Align.BOTTOM_LEFT,
+b.add_text('Bottom+100', ffmpeg_burnins.BOTTOM_LEFT,
            options=options)
 
 # the same options instance can be re-used
 options['x_offset'] = 50
-b.add_text('Top Right+50', ffmpeg_burnins.Align.TOP_RIGHT,
+b.add_text('Top Right+50', ffmpeg_burnins.TOP_RIGHT,
            options=options)
-b.add_text('Bottom Right+50', ffmpeg_burnins.Align.BOTTOM_RIGHT,
+b.add_text('Bottom Right+50', ffmpeg_burnins.BOTTOM_RIGHT,
            options=options)
 
 # frame numbers utilize their own options class
@@ -37,7 +37,7 @@ options = ffmpeg_burnins.FrameNumberOptions(
     frame_offset=101,
     x_offset=100
 )
-b.add_frame_numbers(ffmpeg_burnins.Align.TOP_LEFT, options=options)
+b.add_frame_numbers(ffmpeg_burnins.TOP_LEFT, options=options)
 
 # you can either generate the command string (without subprocessing)
 print(b.command('test.mov', overwrite=True))
