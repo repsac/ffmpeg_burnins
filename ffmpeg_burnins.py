@@ -27,22 +27,8 @@ for applying text (with a background) to the rendered media.
 import os
 import sys
 import json
-from enum import Enum
 from subprocess import Popen, PIPE
 from PIL import ImageFont
-
-
-class Command(Enum):
-    """
-    Command preset strings for ffmpeg/ffprobe
-    """
-    FFMPEG = ('ffmpeg -loglevel panic -i %(input)s '
-              '%(filters)s %(args)s%(output)s')
-    FFPROBE = ('ffprobe -v quiet -print_format json -show_format '
-               '-show_streams %(source)s')
-    DRAWBOX = 'drawbox=%(x)d:%(y)d:%(w)d:%(h)d:%(color)s@%(opacity).1f:t=max'
-    DRAWTEXT = ("drawtext=text='%(text)s':x=%(x)s:y=%(y)s:fontcolor="
-                "%(color)s@%(opacity).1f:fontsize=%(size)d:fontfile=%(font)s")
 
 
 def _system_font():
@@ -56,9 +42,11 @@ def _system_font():
         fonts = ('arial.ttf', 'calibri.ttf', 'times.ttf')
     elif sys.platform.startswith('darwin'):
         font_path = '/System/Library/Fonts'
-        fonts = ('ArialHB.ttc', 'Menlo.ttc')
+        fonts = ('Menlo.ttc',)
     else:
-        raise OSError("TODO: Linux font support missing.")
+        # assuming linux
+        font_path = 'usr/share/fonts/msttcorefonts'
+        fonts = ('arial.ttf', 'times.ttf', 'couri.ttf')
 
     system_font = None
     for font in fonts:
@@ -68,34 +56,32 @@ def _system_font():
             break
     else:
         raise OSError("Could not determine system font.")
-
     return system_font
 
 
-class Default(Enum):
-    """
-    Default values. Users should modify these to fit their
-    own preferences, especially the font file."
-    """
-    FONT = _system_font()
-    FONT_SIZE = 16
-    FONT_COLOR = 'white'
-    BG_COLOR = 'black'
-    BG_PADDING = 5
+# Default valuues
+FONT = _system_font()
+FONT_SIZE = 16
+FONT_COLOR = 'white'
+BG_COLOR = 'black'
+BG_PADDING = 5
 
+# FFMPEG command strings
+FFMPEG = ('ffmpeg -loglevel panic -i %(input)s '
+          '%(filters)s %(args)s%(output)s')
+FFPROBE = ('ffprobe -v quiet -print_format json -show_format '
+           '-show_streams %(source)s')
+DRAWBOX = 'drawbox=%(x)d:%(y)d:%(w)d:%(h)d:%(color)s@%(opacity).1f:t=max'
+DRAWTEXT = ("drawtext=text='%(text)s':x=%(x)s:y=%(y)s:fontcolor="
+            "%(color)s@%(opacity).1f:fontsize=%(size)d:fontfile=%(font)s")
 
-class Align(Enum):
-    """
-    Valid aligment parameters. Users should use this class
-    and not try to pass in their own custom values when
-    defining the alignment to use.
-    """
-    TOP_CENTERED = 0x0
-    BOTTOM_CENTERED = 0x1
-    TOP_LEFT = 0x2
-    BOTTOM_LEFT = 0x3
-    TOP_RIGHT = 0x4
-    BOTTOM_RIGHT = 0x5
+# Valid aligment parameters.
+TOP_CENTERED = 'top_centered'
+BOTTOM_CENTERED = 'bottom_centered'
+TOP_LEFT = 'top_left'
+BOTTOM_LEFT = 'bottom_left'
+TOP_RIGHT = 'top_right'
+BOTTOM_RIGHT = 'bottom_right'
 
 
 class Options(dict):
@@ -106,11 +92,11 @@ class Options(dict):
         'opacity': 1,
         'x_offset': 0,
         'y_offset': 0,
-        'font': Default.FONT.value,
-        'font_size': Default.FONT_SIZE.value,
-        'bg_color': Default.BG_COLOR.value,
-        'bg_padding': Default.BG_PADDING.value,
-        'font_color': Default.FONT_COLOR.value
+        'font': FONT,
+        'font_size': FONT_SIZE,
+        'bg_color': BG_COLOR,
+        'bg_padding': BG_PADDING,
+        'font_color': FONT_COLOR
     }
 
     def __init__(self, **kwargs):
@@ -169,16 +155,17 @@ class Burnins(object):
     flags for the FFMPEG command.
     """
 
-    def __init__(self, source):
+    def __init__(self, source, streams=None):
         """
         :param str source: source media file
+        :param [] streams: ffprobe stream data if parsed as a pre-process
         """
         self.source = source
         self.filters = {
             'drawbox': [],
             'drawtext': []
         }
-        self._streams = _streams(self.source)
+        self._streams = streams or _streams(self.source)
 
     def __repr__(self):
         return '<Overlayout - %s>' % os.path.basename(self.source)
@@ -283,7 +270,7 @@ class Burnins(object):
                              bg_size,
                              [options['x_offset'],
                               options['y_offset']]))
-        self.filters['drawbox'].append(Command.DRAWBOX.value % data)
+        self.filters['drawbox'].append(DRAWBOX % data)
 
         data = {
             'text': options.get('expression') or text,
@@ -297,7 +284,7 @@ class Burnins(object):
                               [options['x_offset'],
                                options['y_offset']],
                               options['bg_padding']))
-        self.filters['drawtext'].append(Command.DRAWTEXT.value % data)
+        self.filters['drawtext'].append(DRAWTEXT % data)
 
     def command(self, output=None, args=None, overwrite=False):
         """
@@ -312,7 +299,7 @@ class Burnins(object):
         output = output or ''
         if overwrite:
             output = '-y %s' % output
-        return (Command.FFMPEG.value % {
+        return (FFMPEG % {
             'input': self.source,
             'output': output,
             'args': '%s ' % args if args else '',
@@ -347,7 +334,7 @@ def _streams(source):
     :param str source: source media file
     :rtype: [{}, ...]
     """
-    command = Command.FFPROBE.value % {'source': source}
+    command = FFPROBE % {'source': source}
     proc = Popen(command, shell=True, stdout=PIPE)
     out = proc.communicate()[0]
     if proc.returncode != 0:
@@ -360,19 +347,19 @@ def _drawbox(align, resolution, bg_size, offset):
     :rtype: {'x': int, 'y': int}
     """
     x_pos = 0
-    if align in (Align.TOP_CENTERED, Align.BOTTOM_CENTERED):
+    if align in (TOP_CENTERED, BOTTOM_CENTERED):
         x_pos = (resolution[0] - bg_size[0]) / 2
-    elif align in (Align.TOP_LEFT, Align.BOTTOM_LEFT):
+    elif align in (TOP_LEFT, BOTTOM_LEFT):
         x_pos = offset[0]
-    elif align in (Align.TOP_RIGHT, Align.BOTTOM_RIGHT):
+    elif align in (TOP_RIGHT, BOTTOM_RIGHT):
         x_pos = resolution[0] - (bg_size[0] + offset[0])
     else:
         raise RuntimeError("Unknown alignment '%s'" % str(align))
 
     y_pos = 0
-    if align in (Align.BOTTOM_CENTERED,
-                 Align.BOTTOM_LEFT,
-                 Align.BOTTOM_RIGHT):
+    if align in (BOTTOM_CENTERED,
+                 BOTTOM_LEFT,
+                 BOTTOM_RIGHT):
         y_pos = resolution[1] - bg_size[1]
         offset[1] *= -1
     return {'x': x_pos, 'y': y_pos + offset[1]}
@@ -383,18 +370,18 @@ def _drawtext(align, resolution, bg_size, offset, padding):
     :rtype: {'x': int, 'y': int}
     """
     x_pos = '0'
-    if align in (Align.TOP_CENTERED, Align.BOTTOM_CENTERED):
+    if align in (TOP_CENTERED, BOTTOM_CENTERED):
         x_pos = 'w/2-tw/2+%d' % (padding/2)
-    elif align in (Align.TOP_RIGHT, Align.BOTTOM_RIGHT):
+    elif align in (TOP_RIGHT, BOTTOM_RIGHT):
         x_pos = resolution[0] - (bg_size[0] + offset[0])
         x_pos += (padding/2)
-    elif align in (Align.TOP_LEFT, Align.BOTTOM_LEFT):
+    elif align in (TOP_LEFT, BOTTOM_LEFT):
         x_pos = offset[0]
         x_pos += (padding/2)
 
-    if align in (Align.TOP_CENTERED,
-                 Align.TOP_RIGHT,
-                 Align.TOP_LEFT):
+    if align in (TOP_CENTERED,
+                 TOP_RIGHT,
+                 TOP_LEFT):
         y_pos = '%d' % (offset[1] + padding)
     else:
         y_pos = 'h-text_h-%d' % (offset[1] + padding)
