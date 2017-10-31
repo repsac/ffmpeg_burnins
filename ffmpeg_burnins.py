@@ -79,7 +79,7 @@ FFPROBE = ('ffprobe -v quiet -print_format json -show_format '
 BOX = 'box=1:boxborderw=%(border)d:boxcolor=%(color)s@%(opacity).1f'
 DRAWTEXT = ("drawtext=text='%(text)s':x=%(x)s:y=%(y)s:fontcolor="
             "%(color)s@%(opacity).1f:fontsize=%(size)d:fontfile=%(font)s")
-TIMECODE = ("drawtext=timecode='%(text)s':timecode_rate=%(fps)d"
+TIMECODE = ("drawtext=timecode='%(text)s':timecode_rate=%(fps).2f"
             ":x=%(x)s:y=%(y)s:fontcolor="
             "%(color)s@%(opacity).1f:fontsize=%(size)d:fontfile=%(font)s")
 
@@ -221,7 +221,8 @@ class Burnins(object):
         :rtype: int
         """
         data = self._video_stream
-        return int(data['r_frame_rate'].split('/')[0])
+        tokens = data['r_frame_rate'].split('/')
+        return int(tokens[0]) / int(tokens[1])
 
     @property
     def _video_stream(self):
@@ -263,25 +264,12 @@ class Burnins(object):
         options = options or TimeCodeOptions()
         timecode = _frames_to_timecode(options['frame_offset'],
                                        self.frame_rate)
-        resolution = self.resolution
-        data = {
-            'text': timecode.replace(':', r'\:'),
-            'fps': self.frame_rate,
-            'color': options['font_color'],
-            'size': options['font_size'],
-            'font': options['font'],
-            'opacity': options['opacity']
-        }
-        data.update(_drawtext(align, resolution, timecode, options))
-        self.filters['drawtext'].append(TIMECODE % data)
-
-        if options.get('bg_color') is not None:
-            box = BOX % {
-                'border': options['bg_padding'],
-                'color': options['bg_color'],
-                'opacity': options['opacity']
-            }
-            self.filters['drawtext'][-1] += ':%s' % box
+        options = options.copy()
+        options['fps'] = self.frame_rate
+        self._add_burnin(timecode.replace(':', r'\:'),
+                         align,
+                         options,
+                         TIMECODE)
 
     def add_frame_numbers(self, align, options=None):
         """
@@ -293,7 +281,7 @@ class Burnins(object):
         options = options or FrameNumberOptions()
         options['expression'] = r'%%{eif\:n+%d\:d}' % options['frame_offset']
         text = str(int(self.end_frame + options['frame_offset']))
-        self._add_burnin(text, align, options)
+        self._add_burnin(text, align, options, DRAWTEXT)
 
     def add_text(self, text, align, options=None):
         """
@@ -304,9 +292,9 @@ class Burnins(object):
         :param dict options: recommended to use TextOptions
         """
         options = options or TextOptions()
-        self._add_burnin(text, align, options)
+        self._add_burnin(text, align, options, DRAWTEXT)
 
-    def _add_burnin(self, text, align, options):
+    def _add_burnin(self, text, align, options, draw):
         """
         Generic method for building the filter flags.
 
@@ -318,12 +306,11 @@ class Burnins(object):
         data = {
             'text': options.get('expression') or text,
             'color': options['font_color'],
-            'size': options['font_size'],
-            'font': options['font'],
-            'opacity': options['opacity']
+            'size': options['font_size']
         }
+        data.update(options)
         data.update(_drawtext(align, resolution, text, options))
-        self.filters['drawtext'].append(DRAWTEXT % data)
+        self.filters['drawtext'].append(draw % data)
 
         if options.get('bg_color') is not None:
             box = BOX % {
