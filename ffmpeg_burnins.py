@@ -265,7 +265,8 @@ class Burnins(object):
         timecode = _frames_to_timecode(options['frame_offset'],
                                        self.frame_rate)
         options = options.copy()
-        options['fps'] = self.frame_rate
+        if not options.get('fps'):
+            options['fps'] = self.frame_rate
         self._add_burnin(timecode.replace(':', r'\:'),
                          align,
                          options,
