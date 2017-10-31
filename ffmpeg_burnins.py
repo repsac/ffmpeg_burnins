@@ -79,6 +79,10 @@ FFPROBE = ('ffprobe -v quiet -print_format json -show_format '
 BOX = 'box=1:boxborderw=%(border)d:boxcolor=%(color)s@%(opacity).1f'
 DRAWTEXT = ("drawtext=text='%(text)s':x=%(x)s:y=%(y)s:fontcolor="
             "%(color)s@%(opacity).1f:fontsize=%(size)d:fontfile=%(font)s")
+TIMECODE = ("drawtext=timecode='%(text)s':timecode_rate=%(fps)d"
+            ":x=%(x)s:y=%(y)s:fontcolor="
+            "%(color)s@%(opacity).1f:fontsize=%(size)d:fontfile=%(font)s")
+
 
 # Valid aligment parameters.
 TOP_CENTERED = 'top_centered'
@@ -154,6 +158,27 @@ class TextOptions(Options):
     """
 
 
+class TimeCodeOptions(Options):
+    """
+    :key int frame_offset: offset the frame numbers
+    :key float opacity: opacity value (0-1)
+    :key bool x_offset: X position offset
+                         (does not apply to centered alignments)
+    :key bool y_offset: Y position offset
+    :key str font: path to the font file
+    :key int font_size: size to render the font in
+    :key str bg_color: background color of the box
+    :key int bg_padding: padding between the font and box
+    :key str font_color: color to render
+    """
+
+    def __init__(self, **kwargs):
+        self._params.update({
+            'frame_offset': 0
+        })
+        super(TimeCodeOptions, self).__init__(**kwargs)
+
+
 class Burnins(object):
     """
     Class that provides convenience API for building filter
@@ -227,6 +252,36 @@ class Burnins(object):
         :rtype: str
         """
         return ','.join(self.filters['drawtext'])
+
+    def add_timecode(self, align, options=None):
+        """
+        Convenience method to create the frame number expression.
+
+        :param enum align: alignment, must use provided enum flags
+        :param dict options: recommended to use TimeCodeOptions
+        """
+        options = options or TimeCodeOptions()
+        timecode = _frames_to_timecode(options['frame_offset'],
+                                       self.frame_rate)
+        resolution = self.resolution
+        data = {
+            'text': timecode.replace(':', r'\:'),
+            'fps': self.frame_rate,
+            'color': options['font_color'],
+            'size': options['font_size'],
+            'font': options['font'],
+            'opacity': options['opacity']
+        }
+        data.update(_drawtext(align, resolution, timecode, options))
+        self.filters['drawtext'].append(TIMECODE % data)
+
+        if options.get('bg_color') is not None:
+            box = BOX % {
+                'border': options['bg_padding'],
+                'color': options['bg_color'],
+                'opacity': options['opacity']
+            }
+            self.filters['drawtext'][-1] += ':%s' % box
 
     def add_frame_numbers(self, align, options=None):
         """
@@ -356,3 +411,11 @@ def _drawtext(align, resolution, text, options):
     else:
         y_pos = 'h-text_h-%d' % (options['y_offset'])
     return {'x': x_pos, 'y': y_pos}
+
+
+def _frames_to_timecode(frames, framerate):
+    return '{0:02d}:{1:02d}:{2:02d}:{3:02d}'.format(
+        int(frames / (3600*framerate)),
+        int(frames / (60*framerate) % 60),
+        int(frames / framerate % 60),
+        int(frames % framerate))
