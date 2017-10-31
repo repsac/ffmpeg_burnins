@@ -161,6 +161,7 @@ class TextOptions(Options):
 class TimeCodeOptions(Options):
     """
     :key int frame_offset: offset the frame numbers
+    :key float fps: frame rate to calculate the timecode by
     :key float opacity: opacity value (0-1)
     :key bool x_offset: X position offset
                          (does not apply to centered alignments)
@@ -174,7 +175,8 @@ class TimeCodeOptions(Options):
 
     def __init__(self, **kwargs):
         self._params.update({
-            'frame_offset': 0
+            'frame_offset': 0,
+            'fps': 24
         })
         super(TimeCodeOptions, self).__init__(**kwargs)
 
